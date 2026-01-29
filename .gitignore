@@ -1,0 +1,23 @@
+# --- Databases & Local Storage (CRITICAL) ---
+data/
+pg_data/
+mongo_storage/
+
+# --- Security ---
+.env
+
+# --- Python ---
+backend/venv/
+backend/__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# --- Frontend (React) ---
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.eslintcache
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
