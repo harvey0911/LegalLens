@@ -1,44 +1,83 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, GripVertical, Loader2, X, Upload } from 'lucide-react';
+import { Search, Plus, GripVertical, Loader2, X, Upload, AlertCircle } from 'lucide-react';
+import api from './api/axios'; // Using your custom Axios instance
 
 interface Project {
-  id: number;
+  id: string; // Changed to string to support UUIDs from backend
   name: string;
   type: string;
   status: 'Done' | 'In Process' | 'Pending';
 }
 
-const INITIAL_DATA: Project[] = [
-  { id: 1, name: 'Cover page', type: 'Marchés de Travaux', status: 'In Process' },
-  { id: 2, name: 'Table of contents', type: 'Marchés de Services', status: 'Done' },
-  { id: 3, name: 'Executive summary', type: 'Marchés de Fournitures', status: 'Done' },
-];
-
 const Projects: React.FC = () => {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[]>(INITIAL_DATA);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Form State
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState('Marchés de Travaux');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleAddProject = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newProject: Project = {
-      id: projects.length + 1,
-      name: newName,
-      type: newType,
-      status: 'Pending',
+  // 1. Fetch Projects on Load
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const response = await api.get('/projects');
+        setProjects(response.data);
+      } catch (error) {
+        console.error("Failed to fetch projects:", error);
+      } finally {
+        setLoading(false);
+      }
     };
-    setProjects([newProject, ...projects]);
-    // Reset and close
-    setNewName('');
-    setSelectedFile(null);
-    setIsModalOpen(false);
+    fetchProjects();
+  }, []);
+
+  // 2. Handle Project Creation + File Upload
+  const handleAddProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // Step A: Create the project record
+      const projectResponse = await api.post('/projects', {
+        name: newName,
+        type: newType,
+        status: 'Pending',
+        description: `Project created via UI: ${newName}`
+      });
+
+      const newProjectId = projectResponse.data.id;
+
+      // Step B: If a file is selected, upload it
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        
+        // Note: This endpoint is currently commented in your backend, 
+        // but this logic is ready when you uncomment it!
+        await api.post(`/projects/${newProjectId}/upload`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+
+      // Step C: Refresh local list and close modal
+      setProjects([projectResponse.data, ...projects]);
+      setNewName('');
+      setSelectedFile(null);
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Creation failed:", error);
+      alert("Failed to create project. Check if backend is running.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const filteredProjects = projects.filter((project) =>
@@ -63,51 +102,56 @@ const Projects: React.FC = () => {
           />
         </div>
 
-        <div className="flex gap-3 shrink-0">
-          <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md hover:bg-gray-200 transition-all shadow-lg active:scale-95">
-            <Plus size={16} />
-            <span className="text-sm font-bold whitespace-nowrap">Add Project</span>
-          </button>
-        </div>
+        <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md hover:bg-gray-200 transition-all shadow-lg active:scale-95">
+          <Plus size={16} />
+          <span className="text-sm font-bold whitespace-nowrap">Add Project</span>
+        </button>
       </div>
 
       {/* Table Section */}
       <div className="w-full overflow-hidden rounded-lg border border-gray-800 bg-[#0f0f0f]">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase tracking-wider bg-[#111111]/50">
-              <th className="p-4 w-10"></th>
-              <th className="p-4 font-semibold">Project Name</th>
-              <th className="p-4 font-semibold">Type</th>
-              <th className="p-4 font-semibold text-right pr-10">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-800/50">
-            {filteredProjects.map((row) => (
-              <tr key={row.id} className="hover:bg-[#161616] group transition-colors">
-                <td className="p-4 w-10 text-center">
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab text-gray-600">
-                    <GripVertical size={14} />
-                  </div>
-                </td>
-                <td
-                  className="p-4 font-medium text-gray-200 text-sm cursor-pointer hover:text-white hover:underline transition-all"
-                  onClick={() => navigate(`/projects/${row.id}`)}
-                >
-                  {row.name}
-                </td>
-                <td className="p-4">
-                  <span className="px-3 py-1 rounded-full bg-[#1a1a1a] border border-gray-800 text-[10px] font-bold text-gray-400">
-                    {row.type}
-                  </span>
-                </td>
-                <td className="p-4 text-right pr-10">
-                  <StatusBadge status={row.status} />
-                </td>
+        {loading ? (
+          <div className="p-20 flex flex-col items-center justify-center text-gray-500 gap-3">
+             <Loader2 className="animate-spin" />
+             <p className="text-sm">Loading projects from database...</p>
+          </div>
+        ) : (
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase tracking-wider bg-[#111111]/50">
+                <th className="p-4 w-10"></th>
+                <th className="p-4 font-semibold">Project Name</th>
+                <th className="p-4 font-semibold">Type</th>
+                <th className="p-4 font-semibold text-right pr-10">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-800/50">
+              {filteredProjects.map((row) => (
+                <tr key={row.id} className="hover:bg-[#161616] group transition-colors">
+                  <td className="p-4 w-10 text-center">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab text-gray-600">
+                      <GripVertical size={14} />
+                    </div>
+                  </td>
+                  <td
+                    className="p-4 font-medium text-gray-200 text-sm cursor-pointer hover:text-white hover:underline transition-all"
+                    onClick={() => navigate(`/projects/${row.id}`)}
+                  >
+                    {row.name}
+                  </td>
+                  <td className="p-4">
+                    <span className="px-3 py-1 rounded-full bg-[#1a1a1a] border border-gray-800 text-[10px] font-bold text-gray-400">
+                      {row.type}
+                    </span>
+                  </td>
+                  <td className="p-4 text-right pr-10">
+                    <StatusBadge status={row.status} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* MODAL OVERLAY */}
@@ -150,11 +194,13 @@ const Projects: React.FC = () => {
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">CPS File (PDF)</label>
                 <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-800 rounded-lg p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-[#1a1a1a] hover:border-gray-600 transition-all"
+                  onClick={() => !isSubmitting && fileInputRef.current?.click()}
+                  className={`border-2 border-dashed border-gray-800 rounded-lg p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all ${
+                    selectedFile ? 'border-green-500/50 bg-green-500/5' : 'hover:bg-[#1a1a1a] hover:border-gray-600'
+                  }`}
                 >
-                  <Upload size={24} className="text-gray-600" />
-                  <span className="text-sm text-gray-400 text-center">
+                  <Upload size={24} className={selectedFile ? "text-green-500" : "text-gray-600"} />
+                  <span className={`text-sm text-center ${selectedFile ? "text-gray-200" : "text-gray-400"}`}>
                     {selectedFile ? selectedFile.name : "Click to upload or drag CPS document"}
                   </span>
                   <input
@@ -170,16 +216,18 @@ const Projects: React.FC = () => {
               <div className="pt-4 flex gap-3">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 px-4 py-2 rounded-md border border-gray-800 text-gray-400 hover:bg-gray-800 transition-colors font-medium"
+                  className="flex-1 px-4 py-2 rounded-md border border-gray-800 text-gray-400 hover:bg-gray-800 transition-colors font-medium disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-white text-black px-4 py-2 rounded-md font-bold hover:bg-gray-200 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-white text-black px-4 py-2 rounded-md font-bold hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-500"
                 >
-                  Create Project
+                  {isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : 'Create Project'}
                 </button>
               </div>
             </form>
@@ -190,12 +238,8 @@ const Projects: React.FC = () => {
   );
 };
 
-interface StatusBadgeProps {
-  status: 'Done' | 'In Process' | 'Pending';
-}
-
-// ... StatusBadge component stays the same as your code ...
-const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
+// --- StatusBadge Component ---
+const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   if (status === 'Done') return (
     <span className="inline-flex items-center gap-2 text-[11px] text-green-500 font-bold uppercase tracking-tight">
       <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" /> Done
