@@ -2,6 +2,7 @@ import psycopg2
 import os
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from psycopg2.extras import RealDictCursor
 
 # Load variables from .env file
 load_dotenv()
@@ -19,12 +20,13 @@ def init_db():
         )
         cur = conn.cursor()
         
-        # Reset for testing - Cleans up existing tables
-        cur.execute("DROP TABLE IF EXISTS reports, appels_offres, projects, cases CASCADE;")
+        # NOTE: Commented out the DROP line to prevent accidental data loss.
+        # Use this only if you want a total reset:
+        # cur.execute("DROP TABLE IF EXISTS reports, appels_offres, projects, cases, tasks CASCADE;")
         
-        # 1. Projects Table (Using UUID for shared reference with MongoDB)
+        # 1. Projects Table
         cur.execute("""
-            CREATE TABLE projects (
+            CREATE TABLE IF NOT EXISTS projects (
                 id UUID PRIMARY KEY, 
                 name VARCHAR(255) NOT NULL,
                 type VARCHAR(50) CHECK (type IN (
@@ -40,7 +42,7 @@ def init_db():
 
         # 2. Appels d'Offres Table
         cur.execute("""
-            CREATE TABLE appels_offres (
+            CREATE TABLE IF NOT EXISTS appels_offres (
                 id SERIAL PRIMARY KEY,
                 project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
                 offre_reference TEXT NOT NULL,
@@ -50,7 +52,7 @@ def init_db():
 
         # 3. Reports Table
         cur.execute("""
-            CREATE TABLE reports (
+            CREATE TABLE IF NOT EXISTS reports (
                 id SERIAL PRIMARY KEY,
                 project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
                 report_name VARCHAR(255),
@@ -59,11 +61,21 @@ def init_db():
                 cps_reference TEXT
             );
         """)
+
+        # 4. NEW: Tasks Table (For the Dashboard Todo-List)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id SERIAL PRIMARY KEY,
+                description TEXT NOT NULL,
+                is_completed BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
         
         conn.commit()
         cur.close()
         conn.close()
-        print("✅ Database initialized! Schema now supports UUID synchronization.")
+        print("✅ Database initialized! Schema updated with Tasks table.")
 
     except Exception as e:
         print(f"❌ Connection Failed: {e}")
@@ -81,13 +93,12 @@ def get_pg_connection():
 
 def get_mongo_client():
     """Returns a MongoClient object for MongoDB."""
-    # Note: Using 127.0.0.1 for local dev, ensure it matches your docker-compose exposed port
     mongo_uri = os.getenv(
         "MONGO_URI", 
         "mongodb://user_admin:password123@127.0.0.1:27017/?authSource=admin"
     )
     return MongoClient(mongo_uri)
 
-# This allows you to run 'python app/database.py' to reset your DB
+# This allows you to run 'python app/database.py' to reset/update your DB manually
 if __name__ == "__main__": 
     init_db()
