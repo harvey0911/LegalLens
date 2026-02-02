@@ -43,10 +43,10 @@ def init_db():
         # 2. Appels d'Offres Table
         cur.execute("""
             CREATE TABLE IF NOT EXISTS appels_offres (
-                id SERIAL PRIMARY KEY,
+                id UUID PRIMARY KEY,
                 project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
                 offre_reference TEXT NOT NULL,
-                status VARCHAR(20) CHECK (status IN ('accepted', 'rejected', 'pending')) DEFAULT 'pending'
+                status VARCHAR(20) CHECK (status IN ('Accepted', 'Rejected', 'Pending')) DEFAULT 'Pending'
             );
         """)
 

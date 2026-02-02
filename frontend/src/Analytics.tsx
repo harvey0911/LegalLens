@@ -1,16 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, BarChart3, ChevronRight, PieChart } from 'lucide-react';
+import api from './api/axios'; // Ensure your axios instance is configured
+import { Search, BarChart3, ChevronRight, PieChart, Loader2 } from 'lucide-react';
 
 const Analytics: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const projects = [
-    { id: 1, name: 'Construction de Pont R+4', date: '2024-01-20', candidates: 12, status: 'Analyzed' },
-    { id: 2, name: 'Rénovation Siège Social', date: '2024-01-18', candidates: 8, status: 'Analyzed' },
-    { id: 3, name: 'Installation Réseau IT', date: '2024-01-15', candidates: 5, status: 'Analyzed' },
-  ];
+  // Fetch dynamic data from the backend
+  useEffect(() => {
+    const fetchAnalyticsData = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get('/projects/analytics-list');
+        setProjects(response.data);
+      } catch (err) {
+        console.error("Failed to fetch analytics projects:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalyticsData();
+  }, []);
+
+  // Filter logic for the search bar
+  const filteredProjects = projects.filter(proj =>
+    proj.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) return (
+    <div className="flex h-64 items-center justify-center">
+      <Loader2 className="animate-spin text-blue-500" size={32} />
+    </div>
+  );
 
   return (
     <div className="w-full animate-in fade-in duration-500">
@@ -21,6 +46,7 @@ const Analytics: React.FC = () => {
             type="text"
             placeholder="Search analytics by project..."
             className="w-full bg-[#111111] border border-gray-800 rounded-md py-2 pl-10 pr-3 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-700"
+            value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
@@ -35,37 +61,45 @@ const Analytics: React.FC = () => {
           <thead>
             <tr className="border-b border-gray-800 text-gray-500 text-[10px] uppercase tracking-widest bg-[#111111]/50">
               <th className="p-4 font-bold">Project Name</th>
-              <th className="p-4 font-bold text-center">Analysis Date</th>
+              <th className="p-4 font-bold text-center">Creation Date</th>
               <th className="p-4 font-bold text-center">Appels d'Offres</th>
               <th className="p-4 font-bold text-right pr-8">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/40">
-            {projects.map((proj) => (
-              <tr 
-                key={proj.id} 
-                onClick={() => navigate(`/analytics/${proj.id}`)}
-                className="hover:bg-[#141414] group cursor-pointer transition-colors"
-              >
-                <td className="p-4">
-                  <div className="flex items-center gap-3">
-                    <BarChart3 size={16} className="text-gray-600 group-hover:text-blue-500" />
-                    <span className="text-sm font-medium text-gray-200">{proj.name}</span>
-                  </div>
-                </td>
-                <td className="p-4 text-center text-xs text-gray-500">{proj.date}</td>
-                <td className="p-4 text-center">
-                  <span className="px-2 py-1 rounded bg-[#1a1a1a] text-[10px] font-bold text-gray-400 border border-gray-800">
-                    {proj.candidates} Folders
-                  </span>
-                </td>
-                <td className="p-4 text-right pr-8">
-                  <button className="text-gray-600 group-hover:text-white transition-colors">
-                    <ChevronRight size={18} />
-                  </button>
+            {filteredProjects.length > 0 ? (
+              filteredProjects.map((proj) => (
+                <tr
+                  key={proj.id}
+                  onClick={() => navigate(`/analytics/${proj.id}`)}
+                  className="hover:bg-[#141414] group cursor-pointer transition-colors"
+                >
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <BarChart3 size={16} className="text-gray-600 group-hover:text-blue-500" />
+                      <span className="text-sm font-medium text-gray-200">{proj.name}</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-center text-xs text-gray-500">{proj.date}</td>
+                  <td className="p-4 text-center">
+                    <span className="px-2 py-1 rounded bg-[#1a1a1a] text-[10px] font-bold text-gray-400 border border-gray-800">
+                      {proj.candidates} Folders
+                    </span>
+                  </td>
+                  <td className="p-4 text-right pr-8">
+                    <button className="text-gray-600 group-hover:text-white transition-colors">
+                      <ChevronRight size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={4} className="p-8 text-center text-gray-600 text-sm italic">
+                  No projects found in database.
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>

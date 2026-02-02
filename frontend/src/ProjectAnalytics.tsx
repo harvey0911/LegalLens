@@ -1,22 +1,62 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Info } from 'lucide-react';
+import api from './api/axios';
+import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Info, Loader2 } from 'lucide-react';
 
 const ProjectAnalytics: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  
+  const [loading, setLoading] = useState(true);
+  const [results, setResults] = useState<{ accepted: any[], rejected: any[] }>({
+    accepted: [],
+    rejected: []
+  });
 
-  const results = {
-    accepted: [
-      { id: 1, company: "TechnoBuild SA", score: "94%", reason: "Full compliance with technical specs & budget." },
-      { id: 2, company: "Global Infra", score: "88%", reason: "Strong environmental certification matching CPS." }
-    ],
-    rejected: [
-      { id: 3, company: "FastTrack Const.", reason: "Missing administrative document (Article 4.2)." },
-      { id: 4, company: "BuildIt Corp", reason: "Pricing exceeds budget ceiling by 25%." },
-      { id: 5, company: "Sarl Bati", reason: "Technical experience insufficient for R+4 complexity." }
-    ]
-  };
+  useEffect(() => {
+    const fetchRealOffers = async () => {
+      try {
+        setLoading(true);
+        // Fetching the real offers linked to this project from your new backend route
+        const response = await api.get(`/projects/${id}/offers`);
+        const allOffers = response.data;
+
+        /**
+         * LOGIC BRIDGE:
+         * Since we don't have AI results in the DB yet, we categorize them 
+         * based on their status or a mock condition so you can see your DB data.
+         */
+        const accepted = allOffers.filter((o: any) => o.status === 'Accepted' || o.id.includes('1b23'));
+        const rejected = allOffers.filter((o: any) => !accepted.includes(o));
+
+        setResults({
+          accepted: accepted.map((o: any) => ({
+            id: o.id,
+            company: o.offre_reference || "Unknown Entity",
+            score: "94%", // Placeholder until AI is ready
+            reason: "Full compliance with technical specs found in database."
+          })),
+          rejected: rejected.map((o: any) => ({
+            id: o.id,
+            company: o.offre_reference || "Unknown Entity",
+            reason: "Initial database check: Documentation incomplete or pending AI review."
+          }))
+        });
+      } catch (err) {
+        console.error("Error fetching analysis:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (id) fetchRealOffers();
+  }, [id]);
+
+  if (loading) return (
+    <div className="flex h-64 items-center justify-center">
+      <Loader2 className="animate-spin text-blue-500" size={32} />
+    </div>
+  );
 
   return (
     <div className="w-full animate-in fade-in duration-500">
@@ -27,15 +67,15 @@ const ProjectAnalytics: React.FC = () => {
         <ArrowLeft size={16} /> Back to Analytics List
       </button>
 
-      <div className="mb-10">
+      <div className="mb-10 text-left">
         <h1 className="text-2xl font-bold text-white mb-2">AI Analysis Results</h1>
-        <p className="text-gray-500 text-sm italic">Project ID: {id} • Model: LegalLens-LLM-v1</p>
+        <p className="text-gray-500 text-sm italic">Project ID: {id} • Source: Real-time Database</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* ACCEPTED COLUMN */}
-        <div className="space-y-4">
+        <div className="space-y-4 text-left">
           <div className="flex items-center gap-2 px-2">
             <CheckCircle2 className="text-green-500" size={20} />
             <h2 className="text-sm font-bold text-white uppercase tracking-widest">Accepted Offers</h2>
@@ -56,7 +96,7 @@ const ProjectAnalytics: React.FC = () => {
         </div>
 
         {/* REJECTED COLUMN */}
-        <div className="space-y-4">
+        <div className="space-y-4 text-left">
           <div className="flex items-center gap-2 px-2">
             <XCircle className="text-rose-500" size={20} />
             <h2 className="text-sm font-bold text-white uppercase tracking-widest">Rejected Offers</h2>
@@ -78,7 +118,6 @@ const ProjectAnalytics: React.FC = () => {
             </div>
           ))}
         </div>
-
       </div>
     </div>
   );

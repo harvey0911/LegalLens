@@ -123,6 +123,64 @@ async def list_projects():
         raise HTTPException(status_code=500, detail=str(e))
 
 # --- 4. PDF UPLOAD (COMMENTED OUT) ---
+@router.get("/analytics-list")
+async def get_analytics_project_list():
+    """
+    Fetches projects with the count of associated offers 
+    specifically for the Analytics dashboard.
+    """
+    try:
+        pg_conn = get_pg_connection()
+        cur = pg_conn.cursor()
+        
+        # We join projects with appels_offres to count the candidates per project
+        query = """
+            SELECT 
+                p.id, 
+                p.name, 
+                p.created_at, 
+                COUNT(a.id) as candidates_count
+            FROM projects p
+            LEFT JOIN appels_offres a ON p.id = a.project_id
+            GROUP BY p.id, p.name, p.created_at
+            ORDER BY p.created_at DESC;
+        """
+        cur.execute(query)
+        rows = cur.fetchall()
+        
+        results = []
+        for r in rows:
+            results.append({
+                "id": str(r[0]),
+                "name": r[1],
+                "date": r[2].strftime("%Y-%m-%d") if r[2] else "N/A",
+                "candidates": r[3]
+            })
+            
+        cur.close()
+        pg_conn.close()
+        return results
+    except Exception as e:
+        print(f"Database Error: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch analytics list")
+    
+@router.get("/{project_id}/offers")
+async def get_project_offers(project_id: str):
+    try:
+        pg_conn = get_pg_connection()
+        cur = pg_conn.cursor()
+        cur.execute("""
+            SELECT id, offre_reference, status 
+            FROM appels_offres 
+            WHERE project_id = %s
+        """, (project_id,))
+        rows = cur.fetchall()
+        cur.close()
+        pg_conn.close()
+        
+        return [{"id": str(r[0]), "offre_reference": r[1], "status": r[2]} for r in rows]
+    except Exception as e:
+        return []
 
 """
 @router.post("/{project_id}/upload")
